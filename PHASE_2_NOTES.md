@@ -5,7 +5,7 @@ Everything here was intentionally cut from the MVP. Do not build any of it until
 ## Phase 2 (next, once the MVP is trusted)
 
 - **Add Taha as an approver.** Already designed for: flip the approver config array from `["jeremy"]` to `["jeremy", "taha"]`. Then add routing (either approver can approve, or specific tiers route to specific people).
-- **Per-user OAuth** instead of issued bearer tokens, so onboarding a teammate does not require minting a token by hand.
+- **Per-user OAuth** instead of issued bearer tokens, so onboarding a teammate does not require minting a token by hand. (Partially done: the server now runs an OAuth 2.1 flow so claude.ai chat / Projects / Cowork can connect, but the sign-in step still authenticates with a hand-minted gateway token. The remaining work is real SSO, for example Sign in with Slack or Google, so onboarding needs no token at all. The Slack app already exists, so Slack SSO is the natural path.)
 - **Downgrade delete-service to autonomous** if staging service deletes prove cheap and recoverable in practice. Keep delete-project, delete-environment, wipe-volume, and bulk-delete-variables gated.
 - **Volume data backup as a smarter default** with an actual restore path, not just a pre-delete copy.
 

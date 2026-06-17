@@ -76,6 +76,36 @@ export async function initSchema(): Promise<void> {
       slack_ts      TEXT,
       created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
     );
+
+    -- OAuth 2.1 authorization server state (so claude.ai chat / Projects /
+    -- Cowork can connect; their connector UI requires OAuth, not a static token).
+    CREATE TABLE IF NOT EXISTS oauth_clients (
+      client_id     TEXT PRIMARY KEY,
+      redirect_uris JSONB NOT NULL,
+      client_name   TEXT,
+      created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+
+    CREATE TABLE IF NOT EXISTS oauth_codes (
+      code_hash      TEXT PRIMARY KEY,
+      client_id      TEXT NOT NULL,
+      redirect_uri   TEXT NOT NULL,
+      code_challenge TEXT NOT NULL,
+      identity       TEXT NOT NULL,
+      scope          TEXT,
+      used           BOOLEAN NOT NULL DEFAULT false,
+      expires_at     TIMESTAMPTZ NOT NULL,
+      created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+
+    CREATE TABLE IF NOT EXISTS oauth_tokens (
+      token_hash  TEXT PRIMARY KEY,
+      kind        TEXT NOT NULL,
+      identity    TEXT NOT NULL,
+      client_id   TEXT,
+      expires_at  TIMESTAMPTZ NOT NULL,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
   `);
 }
 

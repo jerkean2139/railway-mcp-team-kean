@@ -151,10 +151,14 @@ You should now have all of these. Check them off:
    **Generate Domain**. Copy the web address it gives you (it ends in
    `.up.railway.app`).
    - Save it as: your server address.
+7. Add one more variable now that you have the address, then let it redeploy:
+   - `PUBLIC_URL` = your server address, with `https://` and no slash at the end,
+     for example `https://your-app.up.railway.app`. This lets Claude chat and
+     Cowork connect.
 
 ### Check it is alive
-7. Open a browser and go to: `https://YOUR-SERVER-ADDRESS/health`
-8. You should see `{"status":"ok",...}`. If you do, the server is running.
+8. Open a browser and go to: `https://YOUR-SERVER-ADDRESS/health`
+9. You should see `{"status":"ok",...}`. If you do, the server is running.
 
 ---
 
@@ -176,13 +180,31 @@ Now that the server is live, tell Slack where to send button clicks.
 
 ## Step 9: Connect Claude to the server
 
-In Claude, add a new MCP server with these details:
+There are two ways, depending on where you use Claude. Both check the same
+allowlist, so you use your gateway token either way.
 
-- **Type:** HTTP (remote MCP server)
-- **URL:** your server address with `/mcp` at the end, for example
-  `https://your-server.up.railway.app/mcp`
-- **Header:** `Authorization: Bearer YOUR_GATEWAY_TOKEN`
-  (use the gateway token you made in Step 4)
+### Option A: Claude Code (on your computer)
+
+Run this in a terminal, putting in your real server address and gateway token:
+
+```
+claude mcp add --transport http railway-guardrail https://YOUR-SERVER/mcp --header "Authorization: Bearer YOUR_GATEWAY_TOKEN" -s user
+```
+
+Then type `/mcp` inside Claude Code. You should see `railway-guardrail` connected.
+
+### Option B: Claude chat, Projects, or Cowork (the website or desktop app)
+
+These connect with a sign in, not a pasted header.
+
+1. In Claude, open **Settings**, then **Connectors**.
+2. Click **Add custom connector**.
+3. For the URL, paste your server address with `/mcp` at the end, for example
+   `https://your-server.up.railway.app/mcp`.
+4. Click to connect. A **sign in page** from your server appears.
+5. On that page, paste your **gateway token** (from Step 4) and click
+   **Authorize**.
+6. Claude is now connected. The connector works in normal chats and in Projects.
 
 ---
 

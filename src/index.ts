@@ -10,11 +10,12 @@
 import express, { type NextFunction, type Request, type Response } from 'express';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
-import { config, identityForToken, identityForSlackUser, isApprover } from './config.js';
+import { config, identityForSlackUser, isApprover } from './config.js';
 import { initSchema } from './db.js';
 import { registerTools } from './tools.js';
 import { decideApproval, getApproval } from './approvals.js';
 import { verifySlackSignature } from './slack.js';
+import { registerOAuth, resolveIdentity } from './oauth.js';
 
 const app = express();
 
@@ -23,13 +24,27 @@ app.get('/health', (_req, res) => {
   res.status(200).json({ status: 'ok', service: 'railway-guardrail-mcp' });
 });
 
-// ---- Gateway bearer auth ----------------------------------------------------
-function requireAuth(req: Request, res: Response, next: NextFunction): void {
+// ---- OAuth 2.1 + discovery routes (for claude.ai chat / Projects / Cowork) --
+registerOAuth(app);
+
+// ---- Bearer auth: static gateway tokens OR OAuth access tokens --------------
+async function requireAuth(req: Request, res: Response, next: NextFunction): Promise<void> {
   const header = req.headers.authorization ?? '';
   const token = header.startsWith('Bearer ') ? header.slice(7).trim() : '';
-  const identity = token ? identityForToken(token) : null;
+  let identity: string | null = null;
+  try {
+    identity = token ? await resolveIdentity(token) : null;
+  } catch {
+    res.status(500).json({ jsonrpc: '2.0', error: { code: -32603, message: 'Auth check failed.' }, id: null });
+    return;
+  }
   if (!identity) {
-    // A non-allowlisted identity is rejected at connect.
+    // Point OAuth-capable clients (claude.ai) at the resource metadata so they
+    // can start the authorization flow. Static-token clients just see 401.
+    const proto = ((req.headers['x-forwarded-proto'] as string) || 'https').split(',')[0];
+    const host = (req.headers['x-forwarded-host'] as string) || req.headers.host || 'localhost';
+    const base = config.publicUrl ? config.publicUrl.replace(/\/+$/, '') : `${proto}://${host}`;
+    res.setHeader('WWW-Authenticate', `Bearer resource_metadata="${base}/.well-known/oauth-protected-resource"`);
     res.status(401).json({
       jsonrpc: '2.0',
       error: { code: -32001, message: 'Unauthorized: token is not on the allowlist.' },

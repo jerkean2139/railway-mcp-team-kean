@@ -75,9 +75,32 @@ Redis uses the documented `serviceCreate` image path rather than the undocumente
 
 ## Endpoints
 
-- `POST /mcp` - the MCP endpoint (requires `Authorization: Bearer <gateway token>`).
+- `POST /mcp` - the MCP endpoint (requires a bearer token: a static gateway token or an OAuth access token).
 - `POST /slack/interactions` - receives Slack button clicks (signature verified).
 - `GET /health` - unauthenticated health check.
+- OAuth 2.1 + discovery: `/.well-known/oauth-protected-resource`,
+  `/.well-known/oauth-authorization-server`, `/oauth/register`, `/oauth/authorize`,
+  `/oauth/token`.
+
+## Connecting Claude
+
+Two auth paths, both resolving to the same human-identity allowlist:
+
+- **Claude Code (static bearer):** add the server with your gateway token as a header.
+  ```bash
+  claude mcp add --transport http railway-guardrail \
+    https://YOUR-APP.up.railway.app/mcp \
+    --header "Authorization: Bearer YOUR_GATEWAY_TOKEN" -s user
+  ```
+- **claude.ai chat / Projects / Cowork (OAuth):** their connector UI only accepts
+  OAuth, not a static header, so the server runs a small OAuth 2.1 authorization
+  server (dynamic client registration + PKCE). Add a custom connector pointing at
+  `https://YOUR-APP.up.railway.app/mcp`; Claude runs the OAuth flow and shows a
+  sign-in page where you paste your gateway token once. That token is validated
+  against the same allowlist, and Claude stores the issued OAuth access token.
+
+Onboarding still mints a gateway token per person (used at the OAuth sign-in).
+Removing that step with Slack/Google SSO remains the Phase 2 "per-user OAuth" item.
 
 ## Configuration
 
