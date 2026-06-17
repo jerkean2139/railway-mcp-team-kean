@@ -59,10 +59,12 @@ export const TOOL_RISK: Record<string, ToolRisk> = {
   railway_set_variables: REVERSIBLE,
   railway_generate_domain: REVERSIBLE,
   railway_create_environment: REVERSIBLE,
+  railway_edit_redis: REVERSIBLE,
 
   // Create (auto, logged)
   railway_create_project: CREATE,
   railway_create_service: CREATE,
+  railway_add_redis: CREATE,
 
   // Irreversible (hard gate: Slack approval + config snapshot)
   railway_delete_service: IRREVERSIBLE,

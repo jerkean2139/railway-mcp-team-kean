@@ -173,12 +173,13 @@ export async function upsertVariables(
   environmentId: string,
   serviceId: string | undefined,
   variables: Record<string, string>,
+  skipDeploys = false,
 ): Promise<void> {
   await railwayGraphQL(
     `mutation setVars($input: VariableCollectionUpsertInput!) {
        variableCollectionUpsert(input: $input)
      }`,
-    { input: { projectId, environmentId, serviceId: serviceId ?? null, variables } },
+    { input: { projectId, environmentId, serviceId: serviceId ?? null, variables, skipDeploys } },
   );
 }
 
@@ -234,6 +235,45 @@ export async function createService(
     { input },
   );
   return data.serviceCreate;
+}
+
+/** Create a persistent volume for a service (used when provisioning a database). */
+export async function createVolume(
+  projectId: string,
+  serviceId: string,
+  environmentId: string,
+  mountPath: string,
+): Promise<{ id: string }> {
+  const data = await railwayGraphQL<{ volumeCreate: { id: string } }>(
+    `mutation makeVolume($input: VolumeCreateInput!) {
+       volumeCreate(input: $input) { id }
+     }`,
+    { input: { projectId, serviceId, environmentId, mountPath } },
+  );
+  return data.volumeCreate;
+}
+
+export interface ServiceInstanceUpdateInput {
+  startCommand?: string;
+  healthcheckTimeout?: number;
+  region?: string;
+  numReplicas?: number;
+  restartPolicyType?: 'ON_FAILURE' | 'ALWAYS' | 'NEVER';
+  sleepApplication?: boolean;
+}
+
+/** Update a service's per-environment config. Returns nothing useful (Boolean scalar). */
+export async function updateServiceInstance(
+  serviceId: string,
+  environmentId: string,
+  input: ServiceInstanceUpdateInput,
+): Promise<void> {
+  await railwayGraphQL(
+    `mutation editInstance($serviceId: String!, $environmentId: String!, $input: ServiceInstanceUpdateInput!) {
+       serviceInstanceUpdate(serviceId: $serviceId, environmentId: $environmentId, input: $input)
+     }`,
+    { serviceId, environmentId, input },
+  );
 }
 
 // ---- Irreversible mutations (only ever called after a passed gate) ---------

@@ -8,6 +8,7 @@
  *  - Staging only: env-scoped mutations always use the bound (staging) environment,
  *    so production is never mutated when a staging environment exists.
  */
+import { randomBytes } from 'node:crypto';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { riskFor } from './risk.js';
@@ -498,6 +499,100 @@ export function registerTools(server: McpServer, identity: string): void {
       const service = await railway.createService(binding.projectId, name, { repo, image });
       return {
         content: [{ type: 'text', text: `Created service ${service.name} (${service.id}).` }],
+        audit: { projectId: binding.projectId, projectName: binding.projectName, environment: binding.environmentName },
+      };
+    },
+  );
+
+  define(
+    'railway_add_redis',
+    {
+      title: 'Add Redis',
+      description:
+        'Provision a Redis database in the bound project and environment. Creates a service from the official redis image, attaches a persistent volume at /data, generates a REDIS_PASSWORD (never shown), and enables password auth plus append-only persistence. Reachable by other services over the Railway private network on port 6379.',
+      inputSchema: {
+        name: z.string().optional().describe('Service name for the Redis instance. Defaults to "Redis".'),
+      },
+    },
+    async (args) => {
+      const binding = await requireBinding(identity);
+      const name = (args.name as string | undefined)?.trim() || 'Redis';
+      // Strong, URL-safe password. Never logged, never returned.
+      const password = randomBytes(24).toString('base64url');
+
+      const service = await railway.createService(binding.projectId, name, { image: 'redis:7-alpine' });
+      // Set the password without triggering a deploy yet, then attach a volume,
+      // then set the start command (which redeploys with auth + persistence on).
+      await railway.upsertVariables(binding.projectId, binding.environmentId, service.id, { REDIS_PASSWORD: password }, true);
+      await railway.createVolume(binding.projectId, service.id, binding.environmentId, '/data');
+      await railway.updateServiceInstance(service.id, binding.environmentId, {
+        startCommand: 'redis-server --requirepass "$REDIS_PASSWORD" --appendonly yes',
+      });
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text:
+              `Added Redis service ${service.name} (${service.id}) in ${binding.environmentName}. ` +
+              'A persistent volume is mounted at /data and a REDIS_PASSWORD was generated and set (value masked). ' +
+              'Other services connect over the private network on port 6379 using REDIS_PASSWORD.',
+          },
+        ],
+        audit: { projectId: binding.projectId, projectName: binding.projectName, environment: binding.environmentName },
+      };
+    },
+  );
+
+  define(
+    'railway_edit_redis',
+    {
+      title: 'Edit Redis',
+      description:
+        'Edit the configuration of a Redis service in the bound project. Update instance settings (replicas, region, restart policy, sleep) and/or set variables. If serviceId is omitted, a service whose name contains "redis" is used when exactly one exists.',
+      inputSchema: {
+        serviceId: z.string().optional().describe('The Redis service id. Omit to auto-detect a single redis service.'),
+        numReplicas: z.number().int().min(1).optional().describe('Number of replicas.'),
+        region: z.string().optional().describe('Region, for example us-west1.'),
+        restartPolicyType: z.enum(['ON_FAILURE', 'ALWAYS', 'NEVER']).optional().describe('Restart policy.'),
+        sleepApplication: z.boolean().optional().describe('Whether the service may sleep when idle.'),
+        variables: z.record(z.string(), z.string()).optional().describe('Variables to set on the Redis service. Values are never logged.'),
+      },
+    },
+    async (args) => {
+      const binding = await requireBinding(identity);
+
+      let serviceId = args.serviceId as string | undefined;
+      if (!serviceId) {
+        const services = await railway.listServices(binding.projectId);
+        const matches = services.filter((s) => /redis/i.test(s.name));
+        if (matches.length === 0) throw new Error('No service whose name contains "redis" was found. Pass serviceId.');
+        if (matches.length > 1) throw new Error('More than one redis-like service exists. Pass serviceId to choose one.');
+        serviceId = matches[0]!.id;
+      }
+
+      const instanceInput: railway.ServiceInstanceUpdateInput = {};
+      if (args.numReplicas !== undefined) instanceInput.numReplicas = args.numReplicas as number;
+      if (args.region !== undefined) instanceInput.region = args.region as string;
+      if (args.restartPolicyType !== undefined)
+        instanceInput.restartPolicyType = args.restartPolicyType as railway.ServiceInstanceUpdateInput['restartPolicyType'];
+      if (args.sleepApplication !== undefined) instanceInput.sleepApplication = args.sleepApplication as boolean;
+
+      const variables = args.variables as Record<string, string> | undefined;
+      const changed: string[] = [];
+
+      if (Object.keys(instanceInput).length > 0) {
+        await railway.updateServiceInstance(serviceId, binding.environmentId, instanceInput);
+        changed.push(`settings (${Object.keys(instanceInput).join(', ')})`);
+      }
+      if (variables && Object.keys(variables).length > 0) {
+        await railway.upsertVariables(binding.projectId, binding.environmentId, serviceId, variables);
+        changed.push(`variables (${Object.keys(variables).join(', ')})`);
+      }
+      if (changed.length === 0) throw new Error('Nothing to change. Provide at least one setting or variable.');
+
+      return {
+        content: [{ type: 'text', text: `Updated Redis service ${serviceId}: ${changed.join('; ')}.` }],
         audit: { projectId: binding.projectId, projectName: binding.projectName, environment: binding.environmentName },
       };
     },

@@ -37,15 +37,23 @@ else runs autonomously.
    production-only project pauses for an approver to confirm treating production
    as staging for the session.
 
-## Tools (19)
+## Tools (21)
 
 Session: `railway_whoami`, `railway_select_project`, `railway_check_status`.
 Read: `railway_list_projects`, `railway_list_services`, `railway_list_environments`,
 `railway_get_logs`, `railway_list_variables`.
 Reversible/create: `railway_redeploy`, `railway_set_variables`, `railway_generate_domain`,
-`railway_create_environment`, `railway_create_project`, `railway_create_service`.
+`railway_create_environment`, `railway_create_project`, `railway_create_service`,
+`railway_add_redis`, `railway_edit_redis`.
 Gated: `railway_delete_service`, `railway_delete_project`, `railway_delete_environment`,
 `railway_wipe_volume`, `railway_delete_variables`.
+
+`railway_add_redis` (create tier) and `railway_edit_redis` (reversible tier) are an
+owner-approved extension on top of the original MVP catalog. They manage the Redis
+*service* (provision it from the official redis image with a persistent volume and a
+generated password, and edit its instance settings/variables), not Redis data. Adding
+Redis uses the documented `serviceCreate` image path rather than the undocumented
+`templateDeployV2`, to avoid depending on an unconfirmed schema.
 
 ## Architecture
 
