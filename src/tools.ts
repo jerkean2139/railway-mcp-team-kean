@@ -16,6 +16,7 @@ import { writeAudit } from './db.js';
 import { redactArgs, maskVariableMap } from './redact.js';
 import { getBinding, setBinding, requireBinding } from './session.js';
 import { runGate, requestProdOnlyConfirm } from './gate.js';
+import { setBackupVolumeData, getProjectFlag } from './snapshot.js';
 import * as railway from './railway/api.js';
 import { pool } from './db.js';
 
@@ -132,6 +133,11 @@ export function registerTools(server: McpServer, identity: string): void {
         railwayOk = false;
       }
       const binding = await getBinding(identity);
+      let flagLine = '';
+      if (binding) {
+        const { backupVolumeData } = await getProjectFlag(binding.projectId);
+        flagLine = `Volume backup flag: ${backupVolumeData ? 'on' : 'off'}`;
+      }
       return text(
         [
           `Database: ${dbOk ? 'ok' : 'unreachable'}`,
@@ -139,6 +145,7 @@ export function registerTools(server: McpServer, identity: string): void {
           binding
             ? `Bound project: ${binding.projectName} (env ${binding.environmentName})`
             : 'Bound project: none (call railway_select_project)',
+          ...(flagLine ? [flagLine] : []),
         ].join('\n'),
       );
     },
@@ -593,6 +600,34 @@ export function registerTools(server: McpServer, identity: string): void {
 
       return {
         content: [{ type: 'text', text: `Updated Redis service ${serviceId}: ${changed.join('; ')}.` }],
+        audit: { projectId: binding.projectId, projectName: binding.projectName, environment: binding.environmentName },
+      };
+    },
+  );
+
+  define(
+    'railway_set_backup_flag',
+    {
+      title: 'Set volume backup flag',
+      description:
+        'Turn the per-project volume data backup flag on or off for the bound project. When on, volume data is backed up before a gated volume wipe. Default is off, which treats staging data as throwaway.',
+      inputSchema: {
+        enabled: z
+          .boolean()
+          .describe('true to back up volume data before destructive volume actions, false to treat it as throwaway.'),
+      },
+    },
+    async (args) => {
+      const binding = await requireBinding(identity);
+      const enabled = args.enabled as boolean;
+      await setBackupVolumeData(binding.projectId, enabled);
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `Volume data backup for project ${binding.projectName} is now ${enabled ? 'ON' : 'OFF'}.`,
+          },
+        ],
         audit: { projectId: binding.projectId, projectName: binding.projectName, environment: binding.environmentName },
       };
     },

@@ -15,6 +15,15 @@ export async function getProjectFlag(projectId: string): Promise<{ backupVolumeD
   return { backupVolumeData: rows[0]?.backup_volume_data === true };
 }
 
+/** Turn the per-project volume backup flag on or off. Idempotent upsert. */
+export async function setBackupVolumeData(projectId: string, enabled: boolean): Promise<void> {
+  await pool.query(
+    `INSERT INTO project_flags (project_id, backup_volume_data) VALUES ($1, $2)
+     ON CONFLICT (project_id) DO UPDATE SET backup_volume_data = EXCLUDED.backup_volume_data`,
+    [projectId, enabled],
+  );
+}
+
 interface SnapshotInput {
   projectId: string;
   environment: string;

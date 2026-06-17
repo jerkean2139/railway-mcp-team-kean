@@ -60,6 +60,7 @@ export const TOOL_RISK: Record<string, ToolRisk> = {
   railway_generate_domain: REVERSIBLE,
   railway_create_environment: REVERSIBLE,
   railway_edit_redis: REVERSIBLE,
+  railway_set_backup_flag: REVERSIBLE,
 
   // Create (auto, logged)
   railway_create_project: CREATE,

@@ -37,16 +37,21 @@ else runs autonomously.
    production-only project pauses for an approver to confirm treating production
    as staging for the session.
 
-## Tools (21)
+## Tools (22)
 
 Session: `railway_whoami`, `railway_select_project`, `railway_check_status`.
 Read: `railway_list_projects`, `railway_list_services`, `railway_list_environments`,
 `railway_get_logs`, `railway_list_variables`.
 Reversible/create: `railway_redeploy`, `railway_set_variables`, `railway_generate_domain`,
 `railway_create_environment`, `railway_create_project`, `railway_create_service`,
-`railway_add_redis`, `railway_edit_redis`.
+`railway_add_redis`, `railway_edit_redis`, `railway_set_backup_flag`.
 Gated: `railway_delete_service`, `railway_delete_project`, `railway_delete_environment`,
 `railway_wipe_volume`, `railway_delete_variables`.
+
+`railway_set_backup_flag` (reversible tier) turns the per-project volume backup
+flag on or off for the bound project. When on, volume data is backed up before a
+gated `railway_wipe_volume`. Default is off (staging data is treated as throwaway).
+`railway_check_status` shows the current flag state for the bound project.
 
 `railway_add_redis` (create tier) and `railway_edit_redis` (reversible tier) are an
 owner-approved extension on top of the original MVP catalog. They manage the Redis
@@ -94,6 +99,18 @@ cp .env.example .env   # then fill in real values
 npm run build
 npm run start
 ```
+
+## Tests
+
+```bash
+npm test
+```
+
+The suite (Node's built-in test runner, via `tsx`) pins the security-critical
+logic with no database or network required: secret redaction (no value ever
+leaks), the risk-tier mapping (exactly the five irreversible tools are gated),
+Slack request-signature verification (forgery and replay are rejected), and the
+gateway/approver allowlists.
 
 ## What is intentionally not built
 
