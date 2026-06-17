@@ -19,36 +19,83 @@ function optional(name: string, fallback = ''): string {
 }
 
 /**
- * Parse a JSON object env var of the form {"key":"value", ...}.
+ * Parse a credential map env var that maps a credential (a gateway token or a
+ * Slack user id) to a human identity. Forgiving on purpose, because JSON in env
+ * vars is a common first-timer trap. Accepts either:
+ *
+ *   1. A simple list (recommended):  token:jeremy,token2:taha
+ *      (separator is ":" or "=", entries separated by "," or a newline)
+ *   2. A JSON object:                {"token":"jeremy","token2":"taha"}
+ *
+ * Smart/curly quotes and a single layer of wrapping quotes are tolerated.
  * Returns an empty object if unset.
  */
-function jsonMap(name: string): Record<string, string> {
-  const raw = optional(name);
+export function credentialMap(name: string): Record<string, string> {
+  let raw = optional(name);
   if (!raw) return {};
-  try {
-    const parsed = JSON.parse(raw);
-    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-      return parsed as Record<string, string>;
-    }
-    throw new Error('not an object');
-  } catch (err) {
-    throw new Error(`Environment variable ${name} must be a JSON object, e.g. {"token":"jeremy"}`);
+
+  // Normalize curly quotes that sneak in from notes apps.
+  raw = raw.replace(/[“”]/g, '"').replace(/[‘’]/g, "'");
+
+  // Strip one layer of wrapping quotes around a JSON object, e.g. '{"a":"b"}'.
+  if (
+    raw.length >= 2 &&
+    ((raw.startsWith('"') && raw.endsWith('"')) || (raw.startsWith("'") && raw.endsWith("'")))
+  ) {
+    const inner = raw.slice(1, -1).trim();
+    if (inner.startsWith('{')) raw = inner;
   }
+  raw = raw.trim();
+
+  // JSON object form.
+  if (raw.startsWith('{')) {
+    try {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        const out: Record<string, string> = {};
+        for (const [k, v] of Object.entries(parsed)) out[String(k)] = String(v);
+        return out;
+      }
+    } catch {
+      throw new Error(
+        `Environment variable ${name} looks like JSON but could not be parsed. ` +
+          `Easiest fix: use the simple form instead, for example token:jeremy`,
+      );
+    }
+  }
+
+  // Simple list form: pairs of credential:name, separated by commas or newlines.
+  const out: Record<string, string> = {};
+  for (const entry of raw.split(/[,\n]/)) {
+    const pair = entry.trim();
+    if (!pair) continue;
+    const m = pair.match(/^([^:=]+)[:=](.+)$/);
+    if (!m) {
+      throw new Error(`Environment variable ${name} entry "${pair}" must look like token:name`);
+    }
+    out[m[1]!.trim()] = m[2]!.trim();
+  }
+  if (Object.keys(out).length === 0) {
+    throw new Error(`Environment variable ${name} must list at least one token:name pair.`);
+  }
+  return out;
 }
 
 /**
  * Maps each issued gateway bearer token to the human identity it represents.
  * This is the allowlist: a token not present here cannot connect.
- * Example: GATEWAY_TOKENS = {"gw_live_abc123":"jeremy"}
+ * Simple form: GATEWAY_TOKENS = gw_live_abc123:jeremy
+ * JSON form:   GATEWAY_TOKENS = {"gw_live_abc123":"jeremy"}
  */
-const gatewayTokens = jsonMap('GATEWAY_TOKENS');
+const gatewayTokens = credentialMap('GATEWAY_TOKENS');
 
 /**
  * Maps a Slack user id to the human identity the team knows them by.
  * Used to confirm a button-clicker is an allowlisted approver.
- * Example: SLACK_APPROVER_IDS = {"U0123ABCD":"jeremy"}
+ * Simple form: SLACK_APPROVER_IDS = U0123ABCD:jeremy
+ * JSON form:   SLACK_APPROVER_IDS = {"U0123ABCD":"jeremy"}
  */
-const slackApproverIds = jsonMap('SLACK_APPROVER_IDS');
+const slackApproverIds = credentialMap('SLACK_APPROVER_IDS');
 
 /**
  * The approver allowlist. MVP ships with just Jeremy. Adding Taha later is a

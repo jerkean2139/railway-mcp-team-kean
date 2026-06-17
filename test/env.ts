@@ -6,7 +6,7 @@
  */
 process.env.RAILWAY_TOKEN ??= 'test_railway_token';
 process.env.DATABASE_URL ??= 'postgresql://postgres@localhost:5433/guardrail';
-process.env.GATEWAY_TOKENS ??= '{"gw_test_abc":"jeremy","gw_test_def":"taha"}';
+process.env.GATEWAY_TOKENS ??= 'gw_test_abc:jeremy,gw_test_def:taha';
 process.env.APPROVERS ??= 'jeremy';
 process.env.SLACK_BOT_TOKEN ??= 'xoxb-test';
 process.env.SLACK_SIGNING_SECRET ??= 'testsigningsecret';
